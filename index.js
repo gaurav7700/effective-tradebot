@@ -46,6 +46,10 @@ db.connect(function (err) {
 
 //   })
 
+app.get('/', function(req, res){
+  res.send("Welcome to Cryptovest Trading Bot")
+})
+
 app.post("/tradex/register", function (req, res) {
   db.query(
     "SELECT email from users WHERE email=?",
