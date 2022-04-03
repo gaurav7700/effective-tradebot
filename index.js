@@ -3,7 +3,7 @@ const app = express();
 const cors = require("cors");
 const mysql = require("mysql");
 const bcrypt = require("bcryptjs");
-const {encrypt, decrypt}= require("./Encryption")
+const { encrypt, decrypt } = require("./Encryption");
 const PORT = 8080;
 app.use(
   cors({
@@ -21,25 +21,21 @@ db.connect(function (err) {
   if (err) {
     return console.error("error: " + err.message);
   }
-
-  console.log("Connected to the MySQL server.");
-  console.log("Connected to the MySQL server.");
   setInterval(function () {
     console.log("c");
     db.query("SELECT 1");
   }, 5000);
 });
 
-app.get('/', function(req, res){
-  res.send("Welcome to Cryptovest Trading Bot")
-})
+app.get("/", function (req, res) {
+  res.send("Welcome to Cryptovest Trading Bot");
+});
 
 app.post("/tradex/register", function (req, res) {
   db.query(
     "SELECT email from users WHERE email=?",
     [req.body.email],
     (err, result) => {
-      console.log(result);
       if (result.length < 1) {
         bcrypt.hash(req.body.password, 10).then((hash) => {
           //  store user details in the database server
@@ -58,8 +54,6 @@ app.post("/tradex/register", function (req, res) {
             }
           );
         });
-
-        
       } else {
         res.send({
           message: "Email Already Exists!",
@@ -74,22 +68,29 @@ app.post("/tradex/login", function (req, res) {
   const email = req.body.email;
   const password = req.body.password;
   db.query(
-    "SELECT id, fname from users WHERE email=? AND password=?",
-    [email, password],
+    "SELECT id, fname, password from users WHERE email=?",
+    [email],
     (err, result) => {
       if (result.length < 1) {
         res.send({
           message: "Wrong email or password!",
           registeration: false,
-         
         });
       } else {
-        console.log(result)
-        res.send({
-          message: "Logged In!",
-          registeration: true,
-          id:result[0].id,
-          fname:result[0].fname
+        bcrypt.compare(password, result[0].password).then((match) => {
+          if (!match) {
+            res.send({
+              message: "Wrong email or password!",
+              registeration: false,
+            });
+          } else {
+            res.send({
+              message: "Logged In!",
+              registeration: true,
+              id: result[0].id,
+              fname: result[0].fname,
+            });
+          }
         });
       }
     }
@@ -98,31 +99,44 @@ app.post("/tradex/login", function (req, res) {
 
 app.post("/tradex/getuser", function (req, res) {
   const id = req.body.id;
-  console.log(id);
+ 
   db.query(
     "SELECT apikey, secretkey, iv from details WHERE UserId=?",
     [req.body.id],
     (err, result) => {
-     if(result.length<0){
-       res.send({data:false})
-     } else{
-       res.send({data:true, result, secretkey:decrypt({message:result[0].secretkey, iv:result[0].iv})})
-     }
+     
+      if (result.length < 1) {
+        res.send({ data: false });
+      } else {
+        res.send({
+          data: true,
+          apikey:result[0].apikey,
+          secretkey: decrypt({
+            message: result[0].secretkey,
+            iv: result[0].iv,
+          }),
+        });
+      }
     }
   );
 });
 
 app.post("/tradex/saveapi", function (req, res) {
+
+  const apikey= req.body.api
+  const secretkey=req.body.secret
+  const userid=req.body.userid
   db.query(
     "SELECT * from details WHERE UserId=?",
     [req.body.userid],
     (err, result) => {
-      console.log(result);
+   
+      const encrptsecret= encrypt(secretkey)
       if (result.length < 1) {
-        const encrptmessage = encrypt(req.body.secret)
+
         db.query(
-          "INSERT INTO details (apikey, secretkey,iv, tradingstatus, UserId) VALUES (?, ?,?, ?, ?)",
-          [req.body.api, encrptmessage.message,encrptmessage.iv, false, req.body.userid],
+          "INSERT INTO details (apikey, secretkey,iv,  tradingstatus, UserId) VALUES (?, ?, ?, ?, ?)",
+          [apikey, encrptsecret.message, encrptsecret.iv, false,userid   ],
           (err, result) => {
             if (err) {
               console.log(err);
@@ -135,12 +149,10 @@ app.post("/tradex/saveapi", function (req, res) {
           }
         );
       } else {
-        console.log("found");
-        const encrptmessage = encrypt(req.body.secret)
 
         db.query(
           "UPDATE details SET apikey=?, secretkey=?, iv=?, tradingstatus=? WHERE UserId=?",
-          [req.body.api, encrptmessage.message,encrptmessage.iv, false, req.body.userid],
+          [apikey, encrptsecret.message, encrptsecret.iv, false, req.body.userid],
           (err, result) => {
             if (err) {
               console.log(err);
@@ -156,7 +168,6 @@ app.post("/tradex/saveapi", function (req, res) {
     }
   );
 });
-
 app.listen(process.env.PORT || PORT, function () {
   console.log("Server is Running");
 });
