@@ -2,6 +2,8 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const mysql = require("mysql");
+const bcrypt = require("bcryptjs");
+const {encrypt, decrypt}= require("./Encryption")
 const PORT = 8080;
 app.use(
   cors({
@@ -28,24 +30,6 @@ db.connect(function (err) {
   }, 5000);
 });
 
-//   db.query("SELECT id, fname, lname, dp from users where id IN (?)", [arr], (er, resulta)=>{
-
-//     console.log(resulta)
-//     for (let i = 0; i <=result.length-1; i++) {
-//       for (let j = 0; j <=resulta.length-1; j++) {
-//         if(arr[i] === resulta[j].id){
-
-//           result[i].fname= resulta[j].fname
-//           result[i].lname= resulta[j].lname
-//           result[i].dp= resulta[j].dp
-//         }
-//       }
-//     }
-
-//     res.send({ result, senderid });
-
-//   })
-
 app.get('/', function(req, res){
   res.send("Welcome to Cryptovest Trading Bot")
 })
@@ -57,20 +41,25 @@ app.post("/tradex/register", function (req, res) {
     (err, result) => {
       console.log(result);
       if (result.length < 1) {
-        db.query(
-          "INSERT INTO users (fname, email, password) VALUES (?, ?, ?)",
-          [req.body.fullname, req.body.email, req.body.password],
-          (err, result) => {
-            if (err) {
-              console.log(err);
-            } else {
-              res.send({
-                message: "Account Successfully created!",
-                registeration: true,
-              });
+        bcrypt.hash(req.body.password, 10).then((hash) => {
+          //  store user details in the database server
+          db.query(
+            "INSERT INTO users (fname, email, password) VALUES (?, ?, ?)",
+            [req.body.fullname, req.body.email, hash],
+            (err, result) => {
+              if (err) {
+                console.log(err);
+              } else {
+                res.send({
+                  message: "Account Successfully created!",
+                  registeration: true,
+                });
+              }
             }
-          }
-        );
+          );
+        });
+
+        
       } else {
         res.send({
           message: "Email Already Exists!",
@@ -111,13 +100,13 @@ app.post("/tradex/getuser", function (req, res) {
   const id = req.body.id;
   console.log(id);
   db.query(
-    "SELECT apikey, secretkey from details WHERE UserId=?",
+    "SELECT apikey, secretkey, iv from details WHERE UserId=?",
     [req.body.id],
     (err, result) => {
      if(result.length<0){
        res.send({data:false})
      } else{
-       res.send({data:true, result})
+       res.send({data:true, result, secretkey:decrypt({message:result[0].secretkey, iv:result[0].iv})})
      }
     }
   );
@@ -130,10 +119,10 @@ app.post("/tradex/saveapi", function (req, res) {
     (err, result) => {
       console.log(result);
       if (result.length < 1) {
-        console.log("not found");
+        const encrptmessage = encrypt(req.body.secret)
         db.query(
-          "INSERT INTO details (apikey, secretkey, tradingstatus, UserId) VALUES (?, ?, ?, ?)",
-          [req.body.api, req.body.secret, false, req.body.userid],
+          "INSERT INTO details (apikey, secretkey,iv, tradingstatus, UserId) VALUES (?, ?,?, ?, ?)",
+          [req.body.api, encrptmessage.message,encrptmessage.iv, false, req.body.userid],
           (err, result) => {
             if (err) {
               console.log(err);
@@ -147,10 +136,11 @@ app.post("/tradex/saveapi", function (req, res) {
         );
       } else {
         console.log("found");
+        const encrptmessage = encrypt(req.body.secret)
 
         db.query(
-          "UPDATE details SET apikey=?, secretkey=?, tradingstatus=? WHERE UserId=?",
-          [req.body.api, req.body.secret, false, req.body.userid],
+          "UPDATE details SET apikey=?, secretkey=?, iv=?, tradingstatus=? WHERE UserId=?",
+          [req.body.api, encrptmessage.message,encrptmessage.iv, false, req.body.userid],
           (err, result) => {
             if (err) {
               console.log(err);
