@@ -116,6 +116,7 @@ app.post("/tradex/getuser", function (req, res) {
             if (result.length < 1) {
               res.send({ data: false });
             } else {
+              console.log(result)
               res.send({
                 data: true,
                 apikey: result[0].apikey,
@@ -130,12 +131,13 @@ app.post("/tradex/getuser", function (req, res) {
         );
       } else {
         db.query(
-          "SELECT apikey, secretkey, iv from details WHERE UserId=?",
+          "SELECT apikey, secretkey, iv, tradingstatus from details WHERE UserId=?",
           [req.body.id],
           (err, result) => {
             if (result.length < 1) {
               res.send({ data: false });
             } else {
+              console.log(result)
               res.send({
                 data: true,
                 apikey: result[0].apikey,
