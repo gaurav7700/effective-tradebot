@@ -10,6 +10,7 @@ app.use(
     origin: "*",
   })
 );
+
 app.use(express.json());
 let db = mysql.createConnection({
   host: "us-cdbr-east-05.cleardb.net",
@@ -99,44 +100,90 @@ app.post("/tradex/login", function (req, res) {
 
 app.post("/tradex/getuser", function (req, res) {
   const id = req.body.id;
- 
+  console.log(id);
+
   db.query(
-    "SELECT apikey, secretkey, iv from details WHERE UserId=?",
+    "SELECT * from tradehistory WHERE UserId=? ORDER BY id DESC",
     [req.body.id],
-    (err, result) => {
-     
-      if (result.length < 1) {
-        res.send({ data: false });
+    (err, results) => {
+      console.log(results)
+      if (results.length <1) {
+        db.query(
+          "SELECT apikey, secretkey, iv, tradingstatus from details WHERE UserId=?",
+          [req.body.id],
+          (err, result) => {
+            console.log(result)
+            if (result.length < 1) {
+              res.send({ data: false });
+            } else {
+              res.send({
+                data: true,
+                apikey: result[0].apikey,
+                secretkey: decrypt({
+                  message: result[0].secretkey,
+                  iv: result[0].iv,
+                }),
+                tradingstatus:result[0].tradingstatus
+              });
+            }
+          }
+        );
       } else {
-        res.send({
-          data: true,
-          apikey:result[0].apikey,
-          secretkey: decrypt({
-            message: result[0].secretkey,
-            iv: result[0].iv,
-          }),
-        });
+        db.query(
+          "SELECT apikey, secretkey, iv from details WHERE UserId=?",
+          [req.body.id],
+          (err, result) => {
+            if (result.length < 1) {
+              res.send({ data: false });
+            } else {
+              res.send({
+                data: true,
+                apikey: result[0].apikey,
+                secretkey: decrypt({
+                  message: result[0].secretkey,
+                  iv: result[0].iv,
+                
+                }),
+                tradehistory: results,
+                tradingstatus:result[0].tradingstatus
+              });
+            }
+          }
+        );
       }
     }
   );
 });
 
-app.post("/tradex/saveapi", function (req, res) {
+app.post('/tradex/tradestatus', function (req, res){
+  const tradingstatus = req.body.tradingstatus
+  console.log(tradingstatus)
+  console.log(tradingstatus)
 
-  const apikey= req.body.api
-  const secretkey=req.body.secret
-  const userid=req.body.userid
+  db.query(
+    "UPDATE details SET tradingstatus=? WHERE UserId=?",
+    [tradingstatus, req.body.id],
+    (err, result) => {
+      console.log(err)
+      console.log(result)
+     res.send({updated:true})
+    }
+  );
+})
+
+app.post("/tradex/saveapi", function (req, res) {
+  const apikey = req.body.api;
+  const secretkey = req.body.secret;
+  const userid = req.body.userid;
   db.query(
     "SELECT * from details WHERE UserId=?",
     [req.body.userid],
     (err, result) => {
-   
-      const encrptsecret= encrypt(secretkey)
+      const encrptsecret = encrypt(secretkey);
       if (result.length < 1) {
-
         db.query(
           "INSERT INTO details (apikey, secretkey,iv,  tradingstatus, UserId) VALUES (?, ?, ?, ?, ?)",
-          [apikey, encrptsecret.message, encrptsecret.iv, false,userid   ],
+          [apikey, encrptsecret.message, encrptsecret.iv, 0, userid],
           (err, result) => {
             if (err) {
               console.log(err);
@@ -149,10 +196,15 @@ app.post("/tradex/saveapi", function (req, res) {
           }
         );
       } else {
-
         db.query(
           "UPDATE details SET apikey=?, secretkey=?, iv=?, tradingstatus=? WHERE UserId=?",
-          [apikey, encrptsecret.message, encrptsecret.iv, false, req.body.userid],
+          [
+            apikey,
+            encrptsecret.message,
+            encrptsecret.iv,
+            false,
+            req.body.userid,
+          ],
           (err, result) => {
             if (err) {
               console.log(err);
