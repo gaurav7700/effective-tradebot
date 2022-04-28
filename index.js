@@ -5,6 +5,7 @@ const mysql = require("mysql");
 const bcrypt = require("bcryptjs");
 const { encrypt, decrypt } = require("./Encryption");
 const PORT = 8080;
+console.log('hi')
 app.use(
   cors({
     origin: "*",
